@@ -2,7 +2,11 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-.env
-.vscode/
 audit.db
 test_audit.db
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
+config.bat
+node_modules

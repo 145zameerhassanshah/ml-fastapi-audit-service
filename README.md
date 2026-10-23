@@ -1,79 +1,470 @@
 # ML Model Served via FastAPI with Automatic Logging
 
-A production-style educational milestone that serves a trained scikit-learn classification model through a FastAPI `/predict` endpoint and automatically records successful and failed requests in SQLite.
+A professional educational machine-learning deployment project that serves a trained classification model through a FastAPI REST API, validates incoming requests, returns predictions with probabilities, and automatically logs both successful and failed requests to SQLite for auditing.
 
-> **Important:** The model is trained on synthetic health-like data for software-engineering practice only. It is not a clinical model and must not be used for diagnosis, treatment, or real patient decision-making.
+> **Important:** The included model is trained on synthetic health-like data for software engineering and ML deployment practice only. It is not clinically validated and must not be used for diagnosis, treatment, or real patient decision-making.
 
-## Requirements Covered
-- `/predict` endpoint with validated input
-- predicted class and class-1 probability
-- trained model serialized with joblib
-- automatic SQLite logging of success and failure
-- audit trail endpoint and CLI demonstration
-- README setup and example requests
-- documented limitations
-- automated tests
+## Project Objective
+
+The goal of this milestone is to demonstrate how a trained machine-learning model can be converted into an auditable API service.
+
+The project covers:
+
+- ML model training
+- preprocessing pipeline
+- model serialization
+- FastAPI model serving
+- request validation
+- prediction and probability output
+- automatic SQLite logging
+- successful request logging
+- failed request logging
+- model version tracking
+- automated API testing
+- Swagger/OpenAPI documentation
 
 ## Architecture
+
 ```text
-Client -> POST /predict -> Pydantic validation -> ML model -> prediction/probability -> SQLite audit log -> JSON
-                         \-> invalid request -> failed SQLite audit log -> HTTP 400
+Client Request
+      |
+      v
+POST /predict
+      |
+      v
+Pydantic Validation
+      |
+      +------ Invalid ------> HTTP 400
+      |                         |
+      |                         v
+      |                   SQLite Failed Log
+      |
+     Valid
+      |
+      v
+Serialized ML Pipeline
+      |
+      v
+Prediction + Probability
+      |
+      +--------------------> SQLite Success Log
+      |
+      v
+JSON Response
 ```
 
-## Inputs
-`age` 18-100, `systolic` 70-250, `diastolic` 40-150, `glucose` >0 to 500, `bmi` >10 to 70. These are software validation ranges, not clinical thresholds.
+## Project Structure
 
-## Setup
+```text
+ml-fastapi-audit-service/
+│
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── schemas.py
+│   ├── model_service.py
+│   ├── database.py
+│   └── audit.py
+│
+├── model/
+│   └── risk_model.joblib
+│
+├── scripts/
+│   ├── train_model.py
+│   └── show_audit.py
+│
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   └── test_api.py
+│
+├── .gitignore
+├── pytest.ini
+├── README.md
+└── requirements.txt
+```
+
+## Machine Learning Model
+
+The project uses a binary Logistic Regression classifier built with Scikit-learn.
+
+The training pipeline includes:
+
+```text
+Input Features
+      |
+      v
+StandardScaler
+      |
+      v
+Logistic Regression
+      |
+      v
+Class Prediction + Probability
+```
+
+The model uses the following synthetic features:
+
+- age
+- systolic blood pressure
+- diastolic blood pressure
+- glucose
+- BMI
+
+The complete preprocessing and classification pipeline is serialized using Joblib.
+
+```python
+joblib.dump(model, MODEL_PATH)
+```
+
+During API startup, the saved model is loaded using:
+
+```python
+joblib.load(MODEL_PATH)
+```
+
+The model is loaded for inference and is not retrained for every API request.
+
+## Installation
+
+### 1. Create a virtual environment
+
 ```powershell
 python -m venv .venv
+```
+
+### 2. Activate the environment
+
+```powershell
 .venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
+
+```powershell
 python -m pip install -r requirements.txt
+```
+
+## Train the Model
+
+Run:
+
+```powershell
 python scripts/train_model.py
+```
+
+This creates:
+
+```text
+model/risk_model.joblib
+```
+
+Example terminal output:
+
+```text
+Model saved to: model/risk_model.joblib
+Training samples: 1200
+```
+
+## Run the FastAPI Service
+
+```powershell
 python -m uvicorn app.main:app --reload
 ```
-Swagger: `http://127.0.0.1:8000/docs`
 
-## Example `/predict`
-```json
-{"age":52,"systolic":138,"diastolic":86,"glucose":126.5,"bmi":29.4}
+The API will run at:
+
+```text
+http://127.0.0.1:8000
 ```
+
+## Swagger Documentation
+
+Open:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Swagger UI can be used to test all endpoints interactively.
+
+## API Endpoints
+
+### GET `/health`
+
+Checks whether the API and model service are running.
+
 Example response:
+
 ```json
-{"predicted_class":1,"probability_class_1":0.734281,"model_version":"1.0.0"}
+{
+  "status": "ok",
+  "timestamp_utc": "2026-10-23T10:00:00+00:00",
+  "model_version": "1.0.0"
+}
 ```
-The probability is a model output for synthetic class 1, not a medical risk probability.
 
-## Audit Trail
-Successful and failed prediction requests are stored in `audit.db` with UTC timestamp, payload, status, class, probability, error, and model version.
+### POST `/predict`
 
-View via API:
-`GET /audit?limit=10`
+Runs ML inference.
 
-Or CLI:
+Example request:
+
+```json
+{
+  "age": 52,
+  "systolic": 138,
+  "diastolic": 86,
+  "glucose": 126.5,
+  "bmi": 29.4
+}
+```
+
+Example response:
+
+```json
+{
+  "predicted_class": 1,
+  "probability_class_1": 0.734281,
+  "model_version": "1.0.0"
+}
+```
+
+`predicted_class` represents the model output.
+
+`probability_class_1` represents the classifier's estimated probability for class `1`.
+
+This probability is generated by the demonstration model and must not be interpreted as a clinical risk probability.
+
+## Input Validation
+
+Pydantic validates every prediction request before the model receives it.
+
+Validation rules include:
+
+| Field | Type | Rule |
+|---|---|---|
+| age | integer | 18–100 |
+| systolic | integer | 70–250 |
+| diastolic | integer | 40–150 |
+| glucose | number | greater than 0 and <=500 |
+| BMI | number | greater than 10 and <=70 |
+
+Example invalid request:
+
+```json
+{
+  "age": "hello",
+  "systolic": 138,
+  "diastolic": 86,
+  "glucose": 126.5,
+  "bmi": 29.4
+}
+```
+
+Expected result:
+
+```text
+400 Bad Request
+```
+
+The failed request is automatically logged.
+
+## Automatic SQLite Logging
+
+Every successful and failed prediction request is recorded in SQLite.
+
+The audit database stores:
+
+```text
+id
+timestamp_utc
+status
+request_payload
+predicted_class
+probability_class_1
+error_message
+model_version
+```
+
+Successful request example:
+
+```text
+status = success
+predicted_class = 1
+probability = 0.73
+error_message = null
+```
+
+Failed request example:
+
+```text
+status = failed
+predicted_class = null
+probability = null
+error_message = validation error
+```
+
+## GET `/audit`
+
+Returns recent audit records.
+
+Example:
+
+```text
+GET /audit?limit=10
+```
+
+The endpoint allows verification of both successful and failed prediction requests.
+
+## Demonstrated Audit Trail
+
+To demonstrate the audit trail:
+
+1. Submit a valid `/predict` request.
+2. Submit an invalid `/predict` request.
+3. Open:
+
+```text
+http://127.0.0.1:8000/audit
+```
+
+or run:
+
 ```powershell
 python scripts/show_audit.py
 ```
 
-## Invalid Request Example
-```json
-{"age":"wrong-type","systolic":138,"diastolic":86,"glucose":126.5,"bmi":29.4}
-```
-Expected: HTTP 400, and a failed audit row is written.
+Example audit output:
 
-## Tests
+```text
+ID=4 | status=failed | class=None | prob=None | error=validation error
+ID=3 | status=success | class=1 | prob=0.73 | error=None
+```
+
+This proves that successful and failed requests are automatically persisted.
+
+## curl Example
+
+### Prediction
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+-H "Content-Type: application/json" \
+-d "{\"age\":52,\"systolic\":138,\"diastolic\":86,\"glucose\":126.5,\"bmi\":29.4}"
+```
+
+### Audit Trail
+
+```bash
+curl "http://127.0.0.1:8000/audit?limit=10"
+```
+
+## Automated Tests
+
+Run:
+
 ```powershell
 pytest
 ```
-Covers successful inference, probability range, success logging, invalid types, out-of-range values, missing fields, failure logging, health, and audit limit.
+
+The automated test suite covers:
+
+- health endpoint
+- valid ML prediction
+- probability range validation
+- successful request logging
+- invalid data type handling
+- out-of-range input handling
+- missing required fields
+- failed request logging
+- audit limit behavior
+
+## What This Milestone Demonstrates
+
+This project goes beyond API testing.
+
+The complete workflow is:
+
+```text
+Synthetic Training Data
+        |
+        v
+Preprocessing
+        |
+        v
+Model Training
+        |
+        v
+Model Serialization
+        |
+        v
+FastAPI Deployment
+        |
+        v
+Input Validation
+        |
+        v
+Real-Time Prediction
+        |
+        v
+Probability Output
+        |
+        v
+Automatic Audit Logging
+```
+
+API testing is only used to verify that the deployed ML service works correctly.
 
 ## Limitations
-1. Synthetic training data only; not clinically validated.
-2. SQLite is suitable for local/small services, not distributed high-volume production.
-3. Authentication/authorization are out of scope.
-4. Real sensitive payload logging would require minimization, encryption, access controls, and retention policies.
-5. No drift monitoring, model registry, rate limiting, or production observability.
 
-## Example curl
-```bash
-curl -X POST http://127.0.0.1:8000/predict -H "Content-Type: application/json" -d "{\"age\":52,\"systolic\":138,\"diastolic\":86,\"glucose\":126.5,\"bmi\":29.4}"
-```
+- The model is trained on synthetic data.
+- The model has not been clinically validated.
+- Predictions are for educational demonstration only.
+- SQLite is suitable for local development and smaller applications, not high-volume distributed production systems.
+- Authentication and authorization are not implemented.
+- Sensitive payloads should not be logged directly in real healthcare applications.
+- No model drift monitoring is included.
+- No external model registry is used.
+- No production deployment infrastructure is included.
+
+## Future Improvements
+
+A production-oriented version could include:
+
+- real validated dataset
+- train/validation/test pipeline
+- model comparison
+- hyperparameter tuning
+- model registry
+- Docker
+- PostgreSQL
+- authentication
+- HTTPS
+- privacy-safe logging
+- CI/CD
+- prediction monitoring
+- model drift detection
+- structured observability
+
+## Learning Outcomes
+
+This milestone demonstrates practical understanding of:
+
+- machine-learning model serving
+- serialization with Joblib
+- Scikit-learn pipelines
+- FastAPI REST APIs
+- Pydantic validation
+- prediction probabilities
+- persistent audit logging
+- SQLite
+- HTTP status handling
+- Swagger/OpenAPI
+- automated integration testing
+- model versioning
+- ML deployment fundamentals
+
+## Disclaimer
+
+This project is strictly for learning and software engineering practice. It uses synthetic data and must not be treated as a clinical system.
